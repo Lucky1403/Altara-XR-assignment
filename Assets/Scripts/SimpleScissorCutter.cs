@@ -5,18 +5,16 @@ using UnityEngine.XR.Interaction.Toolkit;
 [RequireComponent(typeof(XRGrabInteractable))]
 public class SimpleScissorCutter : MonoBehaviour
 {
-    [Header("Blade Parts (for the visual snap animation)")]
+    [Header("Blade Parts")]
     public Transform bladeA;
     public Transform bladeB;
     [Range(0f, 60f)] public float snapOpenAngle = 25f;
     public float snapDuration = 0.15f;
 
     [Header("Cut Detection")]
-    [Tooltip("Empty transform at the blade tip, used to find nearby cuttable objects")]
-    public Transform bladeTip;
+    public Transform bladeTip; // Scissor blade tip
     public float cutDetectionRadius = 0.05f;
     public LayerMask cuttableLayer;
-
     private XRGrabInteractable grabInteractable;
     private Quaternion bladeARest;
     private Quaternion bladeBRest;
@@ -46,8 +44,6 @@ public class SimpleScissorCutter : MonoBehaviour
     {
         isAnimating = true;
 
-        // Quick close -> open snap for visual feedback, regardless of whether
-        // anything is actually there to cut.
         yield return AnimateBlades(0f, snapOpenAngle * -1f, snapDuration * 0.4f);
         TryCutNearbyObject();
         yield return AnimateBlades(snapOpenAngle * -1f, 0f, snapDuration * 0.6f);
@@ -79,7 +75,7 @@ public class SimpleScissorCutter : MonoBehaviour
             if (paper != null && !paper.IsCut)
             {
                 paper.Cut();
-                break; // one cut per trigger press
+                break;
             }
         }
     }
