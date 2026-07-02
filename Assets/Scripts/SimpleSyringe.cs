@@ -2,38 +2,41 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
+/// <summary>
+/// Attach to the Syringe root (has the XR Grab Interactable).
+/// Trigger press #1 (needle empty): plays a "load" animation - fluid visual fills up.
+/// Trigger press #2 (needle touching a target AND already loaded): plays an "inject"
+/// animation - fluid visual empties, feedback plays at the contact point.
+/// No plunger dragging - fully driven by the controller trigger button.
+/// </summary>
 [RequireComponent(typeof(XRGrabInteractable))]
 public class SimpleSyringe : MonoBehaviour
 {
-    private enum SyringeState { Empty, Loaded }
-
-    [Header("Fluid Visual")]
-    [Tooltip("Thin cylinder mesh inside the barrel, scaled by fill amount")]
-    public Transform fluidVisual;
-    public float fluidFullScaleY = 1f;
     public float loadDuration = 0.4f;
     public float injectDuration = 0.4f;
+
+    [Header("Plunger Movement")]
+    [Tooltip("The plunger transform, child of this syringe")]
+    public Transform plunger;
+    [Tooltip("Plunger's local position when empty / fully pressed in")]
+    public Vector3 plungerPressedLocalPosition = new Vector3(0.242f, 1.787f, 0.852602f);
+    [Tooltip("Plunger's local position when loaded / fully drawn back")]
+    public Vector3 plungerDrawnLocalPosition = new Vector3(0.271f, 0.586f, 0.852602f);
 
     [Header("Needle / Injection Target Detection")]
     public Transform needleTip;
     public float injectDetectionRadius = 0.03f;
     public LayerMask injectableLayer;
 
-    [Header("Feedback")]
-    public ParticleSystem loadParticles;
-    public ParticleSystem injectParticles;
-    public AudioSource loadSound;
-    public AudioSource injectSound;
-
     private XRGrabInteractable grabInteractable;
-    private SyringeState state = SyringeState.Empty;
+    private bool isEmpty = true;
     private bool isAnimating;
 
     void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
         grabInteractable.activated.AddListener(OnTriggerPressed);
-        SetFluidScale(0f);
+        SetPlungerLocalPosition(plungerPressedLocalPosition);
     }
 
     void OnDestroy()
@@ -45,17 +48,16 @@ public class SimpleSyringe : MonoBehaviour
     {
         if (isAnimating) return;
 
-        if (state == SyringeState.Empty)
+        if (isEmpty)
         {
             StartCoroutine(LoadRoutine());
         }
-        else if (state == SyringeState.Loaded)
+        else
         {
             Transform target = FindNearbyInjectable();
             if (target != null)
                 StartCoroutine(InjectRoutine(target));
-            // If loaded but no target nearby, trigger press does nothing -
-            // this matches "needle must be on the object" from the brief.
+            // If full but no target nearby, trigger press does nothing.
         }
     }
 
@@ -69,50 +71,44 @@ public class SimpleSyringe : MonoBehaviour
     IEnumerator LoadRoutine()
     {
         isAnimating = true;
-        if (loadParticles != null) loadParticles.Play();
-        if (loadSound != null) loadSound.PlayOneShot(loadSound.clip);
 
         float t = 0f;
         while (t < loadDuration)
         {
             t += Time.deltaTime;
-            SetFluidScale(Mathf.Lerp(0f, 1f, t / loadDuration));
+            float normalized = t / loadDuration;
+            // Plunger moves from the empty position to the filled position.
+            SetPlungerLocalPosition(Vector3.Lerp(plungerPressedLocalPosition, plungerDrawnLocalPosition, normalized));
             yield return null;
         }
-        SetFluidScale(1f);
+        SetPlungerLocalPosition(plungerDrawnLocalPosition);
 
-        state = SyringeState.Loaded;
+        isEmpty = false;
         isAnimating = false;
     }
 
     IEnumerator InjectRoutine(Transform target)
     {
         isAnimating = true;
-        if (injectParticles != null)
-        {
-            injectParticles.transform.position = target.position;
-            injectParticles.Play();
-        }
-        if (injectSound != null) injectSound.PlayOneShot(injectSound.clip);
 
         float t = 0f;
         while (t < injectDuration)
         {
             t += Time.deltaTime;
-            SetFluidScale(Mathf.Lerp(1f, 0f, t / injectDuration));
+            float normalized = t / injectDuration;
+            // Plunger moves back from the filled position to the empty position.
+            SetPlungerLocalPosition(Vector3.Lerp(plungerDrawnLocalPosition, plungerPressedLocalPosition, normalized));
             yield return null;
         }
-        SetFluidScale(0f);
+        SetPlungerLocalPosition(plungerPressedLocalPosition);
 
-        state = SyringeState.Empty;
+        isEmpty = true;
         isAnimating = false;
     }
 
-    void SetFluidScale(float normalized)
+    void SetPlungerLocalPosition(Vector3 localPosition)
     {
-        if (fluidVisual == null) return;
-        Vector3 scale = fluidVisual.localScale;
-        scale.y = fluidFullScaleY * normalized;
-        fluidVisual.localScale = scale;
+        if (plunger == null) return;
+        plunger.localPosition = localPosition;
     }
 }
